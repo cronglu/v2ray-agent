@@ -2,10 +2,12 @@ package app
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"v2ray-agent/internal/model"
+	"v2ray-agent/internal/monitor"
 	"v2ray-agent/internal/subscription"
 	"v2ray-agent/internal/web"
 	"v2ray-agent/pkg/core"
@@ -41,9 +43,10 @@ func ShowDashboard() {
 		fmt.Println(util.ColorYellow + " 4. 一键执行 Linux 内核 16MB UDP 缓冲区与 BBR 优化" + util.ColorReset)
 		fmt.Println(util.ColorYellow + " 5. 重新载入并校验官方标准 JSON 配置 (Hot Reload)" + util.ColorReset)
 		fmt.Println(util.ColorYellow + " 6. 重启核心服务 (Restart Xray & Sing-box)" + util.ColorReset)
+		fmt.Println(util.ColorYellow + " 7. 各协议健康监控 (TCP/TLS/QUIC/证书/配置/日志)" + util.ColorReset)
 		fmt.Println(util.ColorYellow + " 0. 退出管理控制台" + util.ColorReset)
 		util.PrintDivider()
-		fmt.Print("请选择操作 [0-6]: ")
+		fmt.Print("请选择操作 [0-7]: ")
 
 		reader := bufio.NewReader(os.Stdin)
 		input, _ := reader.ReadString('\n')
@@ -67,6 +70,10 @@ func ShowDashboard() {
 		case "6":
 			_ = core.RestartService("xray")
 			_ = core.RestartService("sing-box")
+		case "7":
+			mon := monitor.New(state)
+			rep := mon.Run(context.Background())
+			fmt.Print(rep.Render())
 		case "0":
 			fmt.Println("感谢使用 xraycli，再见！")
 			return

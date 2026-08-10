@@ -35,6 +35,15 @@
   - [x] 5.3 编写 `build.sh` 一键构建脚本替代 Makefile
   - [x] 5.4 输出技术档案与进度记录 (`agent-go/changelog/`)
 
+- [x] **Phase 6: 各协议健康监控引擎 (Per-Protocol Robust Monitor)**
+  - [x] 6.1 健康报告数据模型与状态枚举 (healthy/degraded/down/unknown) (`internal/monitor/report.go`)
+  - [x] 6.2 原子探测原语：服务存活、/proc 端口绑定、TCP 连通(重试)、TLS握手+证书、QUIC VN 探针、配置校验、journalctl 日志 (`internal/monitor/checks.go`)
+  - [x] 6.3 QUIC Version Negotiation 存活探针 (零加密依赖) (`internal/monitor/quic.go`)
+  - [x] 6.4 协议自动发现 (解析已部署 Xray/Sing-box JSON inbound，缺失回退 state) + 并发编排 (`internal/monitor/monitor.go`)
+  - [x] 6.5 CLI 子命令接入 (`xraycli status`/`monitor`，`-j` JSON，退出码告警) + TUI 大盘选项 7 (`internal/app/cli.go`, `menu.go`)
+  - [x] 6.6 诊断输出路由 stderr (JSON stdout 纯净) (`pkg/util/logger.go`)
+  - [x] 6.7 txy (Ubuntu 22.04 x86_64) 实测：全新主机全 DOWN / mock 监听 DEGRADED / 关闭 mock DOWN 三场景验证
+
 ---
 
 ## 2. 详细执行日志 (Step-by-step Progress Log)

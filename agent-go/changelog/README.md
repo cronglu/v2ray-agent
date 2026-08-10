@@ -60,3 +60,45 @@
                                  [Go 原生内嵌 Web 伪装站]
                                 (展示 3D 极客网页 / 博客)
 ```
+
+---
+
+## 6. 协议健康监控引擎 (Per-Protocol Health Monitor)
+
+### 6.1 设计目标
+- **各协议独立健康判定**：不再只看 systemd active/inactive，而是对每个协议 inbound 执行多维度原子探测，避免单一信号误报。
+- **高健壮性 / 低误报**：DOWN 仅由确定性失败（端口未绑定 + 不可达）触发；服务未运行但端口可用仅降级为 DEGRADED；QUIC 超时（静默）只降级而非误判 DOWN。
+
+### 6.2 探测维度（每协议 6-7 项原子检查）
+| 探测项 | 说明 | 实现 |
+| :--- | :--- | :--- |
+| **service** | systemd is-active + pgrep 进程存活双保险 | `systemctl is-active` + `pgrep -x` |
+| **port_bind** | 本地端口是否真正监听（权威判定） | 解析 `/proc/net/{tcp,tcp6,udp,udp6}`，按整数值匹配端口（修复 < 4096 端口前导零 bug） |
+| **tcp_reach** | TCP 连通性 + 延迟（含重试） | `net.DialContext` 超时 3s，重试 2 次 |
+| **tls_handshake** | TLS 握手成功 + 证书签发者/剩余天数 | `tls.DialWithDialer`，`InsecureSkipVerify` 以便仍报告自签证书详情 |
+| **quic_probe** | QUIC 服务存活（UDP） | 发送不支持版本的 QUIC 长头部 → 触发 Version Negotiation 响应（无需 QUIC 加密栈依赖） |
+| **cert_file** | UDP 协议证书文件体检（磁盘） | 解析 PEM 证书，计算剩余天数 |
+| **config** | 部署的 JSON 配置语法有效性 | `json.Unmarshal` 校验 |
+| **log_errors** | 近 1h journalctl 错误行数 | `journalctl -u <core> --since=60min -p err` |
+
+### 6.3 状态判定逻辑（低误报）
+```
+DOWN      ← 端口未绑定（确定性失败，无视 systemd 声称的 active/inactive）
+DEGRADED  ← 端口已绑定但不可达 / 服务未运行但端口可用 / 证书即将到期(≤14d) / 配置无效 / 日志错误≥10
+HEALTHY   ← 端口绑定 + 可达 + 服务运行 + 证书有效 + 配置有效 + 无日志错误
+```
+
+### 6.4 输出与集成
+- **终端彩色报告**：`xraycli status` / `xraycli monitor`（每协议含 ✓/✗ 探测明细 + 证书 + 日志）。
+- **JSON 机器可读**：`xraycli monitor -j`（stdout 纯净 JSON，诊断信息走 stderr，可直接 `| jq`）。
+- **退出码驱动告警**：`0`=healthy / `1`=degraded / `2`=down / `3`=unknown，可直接用于 cron 与监控系统。
+- **TUI 大盘**：交互式菜单选项 7 实时展示健康报告。
+- **并发执行**：所有协议探测通过 goroutine 并行执行，报告生成 < 100ms（实测 txy 34-57ms）。
+
+### 6.5 协议发现
+监控引擎自动从已部署的 `/etc/v2ray-agent/xray/config.json` 与 `/etc/v2ray-agent/sing-box/config.json` 解析实际 inbound，识别 VLESS-Reality / VLESS-TLS(443) / Trojan(31296) / Hysteria2 / TUIC v5。当配置文件缺失时，回退到 `config.yaml` 中的端口状态，确保全新或故障主机仍能产出有意义的（大概率 DOWN）报告。
+
+### 6.6 跨平台与零依赖
+- 纯 Go 标准库实现，无任何第三方 QUIC/TLS 依赖。
+- 静态编译（`CGO_ENABLED=0`），单二进制跨 linux/amd64 + arm64 + darwin。
+- 非 Linux 平台自动跳过 `/proc` 与 `journalctl`（返回 skipped，不影响可达性探测的权威性）。

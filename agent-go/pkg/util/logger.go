@@ -39,32 +39,32 @@ func PrintCyan(format string, a ...any) {
 
 // PrintInfo prints standard info log
 func PrintInfo(msg string) {
-	fmt.Printf(ColorCyan+" [INFO] "+ColorReset+"%s\n", msg)
+	fmt.Fprintf(os.Stderr, ColorCyan+" [INFO] "+ColorReset+"%s\n", msg)
 }
 
 // PrintSuccess prints standard success log
 func PrintSuccess(msg string) {
-	fmt.Printf(ColorGreen+" [SUCCESS] "+ColorReset+"%s\n", msg)
+	fmt.Fprintf(os.Stderr, ColorGreen+" [SUCCESS] "+ColorReset+"%s\n", msg)
 }
 
 // PrintWarning prints standard warning log
 func PrintWarning(msg string) {
-	fmt.Printf(ColorYellow+" [WARN] "+ColorReset+"%s\n", msg)
+	fmt.Fprintf(os.Stderr, ColorYellow+" [WARN] "+ColorReset+"%s\n", msg)
 }
 
 // PrintError prints standard error log
 func PrintError(msg string) {
-	fmt.Printf(ColorRed+" [ERROR] "+ColorReset+"%s\n", msg)
+	fmt.Fprintf(os.Stderr, ColorRed+" [ERROR] "+ColorReset+"%s\n", msg)
 }
 
 // PrintStep prints progress step format
 func PrintStep(current, total int, title string) {
-	fmt.Printf("\n"+ColorCyan+ColorBold+" ──> 进度 %d/%d : %s"+ColorReset+"\n", current, total, title)
+	fmt.Fprintf(os.Stderr, "\n"+ColorCyan+ColorBold+" ──> 进度 %d/%d : %s"+ColorReset+"\n", current, total, title)
 }
 
 // PrintDivider prints a decorative line
 func PrintDivider() {
-	fmt.Println(ColorYellow + "==============================================================" + ColorReset)
+	fmt.Fprintln(os.Stderr, ColorYellow + "==============================================================" + ColorReset)
 }
 
 // FatalError prints error and terminates execution
