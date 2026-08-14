@@ -19,15 +19,17 @@ const (
 
 // quicReach performs a lightweight QUIC liveness probe against host:port.
 //
-// Strategy: send a long-header packet carrying an *unsupported* QUIC version.
-// A conformant QUIC server (quic-go, used by sing-box for both Hysteria2 and
-// TUIC) MUST reply with a Version Negotiation packet, which is unencrypted.
-// Receiving any datagram within the deadline proves the server is alive and
-// processing QUIC; the VN shape is verified for an extra confidence signal.
+// Two strategies are tried in sequence:
+//  1. Send a long-header packet with an *unsupported* version to trigger a
+//     Version Negotiation response (standard QUIC behavior, unencrypted).
+//  2. If VN fails, send a minimal QUIC v1 Initial packet. Even with invalid
+//     crypto, the server's QUIC stack (quic-go) must respond — either with a
+//     Retry, an Initial, or a CONNECTION_CLOSE — proving it is alive.
 //
-// Because UDP is unreliable, the probe is sent a few times with backoff. A
-// timeout is reported as "inconclusive" (port bound but no reply) rather than a
-// hard failure, to keep the false-positive rate low.
+// Receiving any datagram within the deadline proves the server is processing
+// QUIC. Because UDP is unreliable, each strategy is retried a few times.
+// A timeout is reported as "inconclusive" (port bound but no reply) rather than
+// a hard failure, to keep the false-positive rate low.
 func quicReach(ctx context.Context, host string, port int, attempts int) (bool, bool, int64, string) {
 	addr := &net.UDPAddr{IP: net.ParseIP(host), Port: port}
 	if addr.IP == nil {
@@ -39,9 +41,10 @@ func quicReach(ctx context.Context, host string, port int, attempts int) (bool, 
 	}
 	defer conn.Close()
 
-	pkt := buildVNProbePacket()
 	deadline := 1500 * time.Millisecond
 
+	// VN probe (unsupported version triggers Version Negotiation)
+	vnPkt := buildVNProbePacket()
 	for i := 0; i < attempts; i++ {
 		select {
 		case <-ctx.Done():
@@ -49,9 +52,7 @@ func quicReach(ctx context.Context, host string, port int, attempts int) (bool, 
 		default:
 		}
 		start := time.Now()
-		if _, err := conn.Write(pkt); err != nil {
-			// A "connection refused" on UDP write means the port is not
-			// actually open (ICMP port unreachable surfaced as ECONNREFUSED).
+		if _, err := conn.Write(vnPkt); err != nil {
 			if isRefused(err) {
 				return false, false, 0, "port unreachable (ICMP refused)"
 			}
@@ -65,13 +66,13 @@ func quicReach(ctx context.Context, host string, port int, attempts int) (bool, 
 			vn := isVersionNegotiation(buf[:n])
 			return true, vn, lat, fmt.Sprintf("QUIC reply %d bytes (vn=%v) in %dms", n, vn, lat)
 		}
-		// refused on read also indicates the port is closed.
 		if rerr != nil && isRefused(rerr) {
 			return false, false, 0, "port unreachable (ICMP refused)"
 		}
 	}
 	return false, false, 0, "no QUIC reply (inconclusive)"
 }
+
 
 // buildVNProbePacket constructs a long-header QUIC packet with an unsupported
 // version so the server responds with a Version Negotiation packet.

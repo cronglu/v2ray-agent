@@ -112,18 +112,20 @@ func GenerateStandardXrayConfig(state *model.GlobalNodeState) ([]byte, error) {
 
 	// Add WARP WireGuard outbound if enabled
 	if state.WARPEnabled && state.WARPPrivateKey != "" {
+		peer := map[string]any{
+			"publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+			"endpoint":  "162.159.192.1:2408",
+		}
+		if reserved := parseReserved(state.WARPReserved); reserved != nil {
+			peer["reserved"] = reserved
+		}
 		outbounds = append(outbounds, map[string]any{
 			"protocol": "wireguard",
 			"tag":      "warp_out",
 			"settings": map[string]any{
 				"secretKey": state.WARPPrivateKey,
 				"address":   []string{state.WARPAddress},
-				"peers": []map[string]any{
-					{
-						"publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-						"endpoint":  "162.159.192.1:2408",
-					},
-				},
+				"peers":     []map[string]any{peer},
 			},
 		})
 	}

@@ -394,14 +394,22 @@ func (m *Monitor) checkQUIC(ctx context.Context, rep *ProtocolReport, in discove
 	if ok {
 		return
 	}
-	// Distinguish a definitively closed port (ICMP refused) from a silent
-	// timeout. The former is a hard failure; the latter is ambiguous and only
-	// degrades to avoid false alarms.
+	// A definitively closed port (ICMP refused) is a hard DOWN. A silent
+	// timeout ("inconclusive") is ambiguous — if the port IS bound and the
+	// service IS active, the server is very likely fine (some QUIC stacks
+	// silently drop unknown-version probes). In that case we don't degrade.
 	if strings.Contains(det, "refused") || strings.Contains(det, "unreachable") {
 		rep.Status = worst(rep.Status, StatusDown)
-	} else {
-		rep.Status = worst(rep.Status, StatusDegraded)
+		return
 	}
+	// Inconclusive: only degrade if port_bind or service already failed.
+	for _, pr := range rep.Probes {
+		if (pr.Name == "port_bind" || pr.Name == "service") && !pr.OK {
+			rep.Status = worst(rep.Status, StatusDegraded)
+			return
+		}
+	}
+	// Port bound + service active + inconclusive QUIC = healthy.
 	_ = vn
 }
 
